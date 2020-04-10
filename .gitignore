@@ -1,0 +1,10 @@
+*.bak
+*.pyc
+*.pyo
+*~
+
+*.orig
+.#*
+#*
+.vscode/
+__pycache__
