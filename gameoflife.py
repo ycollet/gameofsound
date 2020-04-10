@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 # Python code to implement Conway's Game Of Life 
 import argparse 
 import math
@@ -9,6 +11,8 @@ import matplotlib.animation as animation
 import scipy.io.wavfile as wavf
 
 import LIFReader
+
+animation.rcParams['animation.writer'] = 'ffmpeg'
 
 # setting up the values for the grid 
 ON   = 255
@@ -132,7 +136,7 @@ def update(frameNum, img, grid, N):
                 
                 soundFile = np.concatenate((soundFile, soundData))
         
-        print("Generation completed\n")
+        print("Generation completed - frame number: {}".format(frameNum))
         
         return img, 
 
@@ -144,7 +148,8 @@ def process_options():
 
         # add arguments
         parser.add_argument('--grid-size', dest='N', required=False) 
-        parser.add_argument('--mov-file', dest='movfile', required=False) 
+        parser.add_argument('--mov-file', dest='movfile', required=False)
+        parser.add_argument('--mov-time', dest='movtime', required=False)
         parser.add_argument('--interval', dest='interval', required=False) 
         parser.add_argument('--glider', action='store_true', required=False) 
         parser.add_argument('--gosper', action='store_true', required=False) 
@@ -226,7 +231,7 @@ def main(args):
         global patternpos
         
         # set animation update interval 
-        updateInterval = 50
+        updateInterval = 1.0/24.0
         if args.interval: 
                 updateInterval = int(args.interval) 
         
@@ -261,18 +266,26 @@ def main(args):
               # more off than on 
                 grid = randomGrid(N) 
         
+        movtime = 10
+        if args.movtime:
+                movtime = float(args.movtime)
+        
         # set up animation 
-        fig, ax = plt.subplots() 
+        fig, ax = plt.subplots()
+        plt.title('Game of life')
+        ax.set_ylabel('Frequency')
+        ax.set_xlabel('Density')
         img = ax.imshow(grid, interpolation='nearest') 
         ani = animation.FuncAnimation(fig, update, fargs=(img, grid, N, ), 
-                                      frames = 10, 
+                                      frames=int(movtime*24), 
                                       interval=updateInterval, 
-                                      save_count=50) 
+                                      save_count=sys.maxsize,
+                                      blit=True) 
         
         # # of frames? 
         # set output file 
-        if args.movfile: 
-                ani.save(args.movfile, fps=30, extra_args=['-vcodec', 'libx264']) 
+        if args.movfile:
+                ani.save(args.movfile, fps=24, extra_args=['-vcodec', 'libx264']) 
         
         plt.show() 
 
@@ -283,7 +296,7 @@ if __name__ == '__main__':
         global out_fn
         global precompcos
         global N
-        
+
         args = process_options()
         
         if exportSound:
