@@ -14,7 +14,8 @@ Options:
 
 --grid-size=size - the grid size of the game of life: [0 -> N:0 -> N]
 --mov-file - export a mov file of the evolution of the game
---interval - 
+--interval - time in ms between two frames
+--mov-time - duration to save (in s)
 --glider - add a glider in the grid
 --gosper - add a gosper in the grid
 --rectangle=size  - add a square of size [size:size] in the grid
