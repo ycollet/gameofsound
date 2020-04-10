@@ -22,6 +22,7 @@ def LIFReader(filename):
     
     # Strips the newline character
     startPattern = False
+    infoPattern = {'xmin': 0, 'xmax': 0, 'ymin': 0, 'ymax': 0}
     listPattern = [{'maxX': 0, 'maxY': 0, 'posX':0, 'posY':0, 'pattern': []}]
     index2 = 0
     maxX = 0
@@ -99,10 +100,12 @@ def LIFReader(filename):
     #    for elem in items.items():
     #        print(elem)
 
-    print('minPosX = {} maxPosX = {}'.format(minPosX, maxPosX))
-    print('minPosY = {} maxPosY = {}'.format(minPosY, maxPosY))
+    infoPattern['xmin'] = minPosX
+    infoPattern['xmax'] = maxPosX
+    infoPattern['ymin'] = minPosY
+    infoPattern['ymax'] = maxPosY
     
-    return listPattern
+    return listPattern, infoPattern
 
 if __name__ == '__main__': 
     LIFReader('data/SWITCHEN.LIF')

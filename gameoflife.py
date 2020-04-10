@@ -1,10 +1,13 @@
 # Python code to implement Conway's Game Of Life 
 import argparse 
 import math
+import sys
+import random
 import numpy as np 
 import matplotlib.pyplot as plt 
 import matplotlib.animation as animation 
 import scipy.io.wavfile as wavf
+
 import LIFReader
 
 # setting up the values for the grid 
@@ -24,16 +27,20 @@ def addRectangle(i, j, grid, rectanglesize):
         """adds a rectangle of size 10 by 10  with top left cell at (i, j)"""
         grid[i:i+int(rectanglesize), j:j+int(rectanglesize)] = 255 
     
-def addCustom(i, j, grid, patternlist):
+def addCustom(i, j, grid, patternlist, infopattern):
         """adds a custom pattern  with top left cell at (i, j)"""
+        offsetX = -int(infopattern['xmin'])
+        offsetY = -int(infopattern['ymin'])
         for index in range(len(patternlist)):
                 pattern = patternlist[index]
                 posX = int(pattern['posX'])
                 posY = int(pattern['posY'])
+                        
                 for index2 in range(len(pattern['pattern'])):
                         pat = pattern['pattern'][index2]
                         sizepat = len(pat)
-                        grid[posX + i:posX + i + sizepat, posY + j + index2] = pat
+                        print('at pos {} -> {}, {} = {}'.format(offsetX + posX + i, offsetX + posX + i + sizepat, offsetY + posY + j + index2, pat))
+                        grid[offsetX + posX + i:offsetX + posX + i + sizepat, offsetY + posY + j + index2] = pat
 
 def addGlider(i, j, grid): 
         """adds a glider with top left cell at (i, j)"""
@@ -99,35 +106,43 @@ def update(frameNum, img, grid, N):
         grid[:] = newGrid[:]
 
         # update sound file
-        freqMin = 100
-        freqMax = 6000
-        freqBin = (freqMax - freqMin) / N
-        sampleRate = 48000
-        time=0.1
-        soundData = np.zeros(int(time * sampleRate))
-        freqData = np.zeros(N)
-        for i in range(N): 
-                for j in range(N): 
-                    freqData[i] += grid[i, j]
+        global freqMin
+        global freqMax
+        global freqBin
+        global sampleRate
+        global soundEnv
+        global time
+        global exportSound
 
-        for t in range(int(time * sampleRate)):
-            for i in range(N):
-                soundData[t] += freqData[i] * math.sin(2 * math.pi * (i*freqBin + freqMin) * t / sampleRate)
-
-        soundFile = np.concatenate((soundFile, soundData))
-
+        if exportSound == True:
+                soundData = np.zeros(int(time * sampleRate))
+                freqData = np.zeros(N)
+                #for i in range(N): 
+                #        for j in range(N): 
+                #                freqData[i] += grid[i, j]
+                for i in range(N): 
+                        freqData[i] = grid[i][:].sum()
+                
+                for t in range(int(time * sampleRate)):
+                        soundData[t] += np.multiply(freqData, precompcos[t][:]).sum()
+                
+                for i in range(1,soundEnv):
+                        soundData[-i] = soundData[-i] * 1.0 / float(soundEnv) * float(i)
+                        soundData[i-1] = soundData[i-1] * 1.0 / float(soundEnv) * float(i)
+                
+                soundFile = np.concatenate((soundFile, soundData))
+        
         print("Generation completed\n")
         
         return img, 
 
-# main() function 
-def main():
+def process_options():
         # Command line args are in sys.argv[1], sys.argv[2] .. 
         # sys.argv[0] is the script name itself and can be ignored 
         # parse arguments 
         parser = argparse.ArgumentParser(description="Runs Conway's Game of Life simulation.") 
 
-        # add arguments 
+        # add arguments
         parser.add_argument('--grid-size', dest='N', required=False) 
         parser.add_argument('--mov-file', dest='movfile', required=False) 
         parser.add_argument('--interval', dest='interval', required=False) 
@@ -136,38 +151,116 @@ def main():
         parser.add_argument('--rectangle', dest='rectanglesize', required=False) 
         parser.add_argument('--line', dest='linesize', required=False) 
         parser.add_argument('--custom', dest='custom', required=False) 
-        args = parser.parse_args() 
+        parser.add_argument('--exportsound', action='store_true', required=False) 
+        parser.add_argument('--soundfilename', dest='soundfilename', required=False) 
+        parser.add_argument('--fmin', dest='fmin', required=False) 
+        parser.add_argument('--fmax', dest='fmax', required=False) 
+        parser.add_argument('--soundtime', dest='soundtime', required=False) 
+        parser.add_argument('--soundsr', dest='soundsr', required=False) 
+        parser.add_argument('--soundenv', dest='soundenv', required=False) 
+        parser.add_argument('--patternpos', dest='patternpos', required=False) 
+        args = parser.parse_args()
+        
+        global freqMin
+        global freqMax
+        global freqBin
+        global sampleRate
+        global soundEnv
+        global time
+        global exportSound
+        global out_fn
+        global N
+        global patternpos
         
         # set grid size 
         N = 100
         if args.N and int(args.N) > 8: 
                 N = int(args.N) 
-                
+        
+        freqMin = float(100)
+        if args.fmin:
+                freqMin = float(args.fmin)
+
+        freqMax = float(6000)
+        if args.fmax:
+                freqMax = float(args.fmax)
+
+        out_fn = 'data.wav'
+        if args.soundfilename:
+                outfn = args.soundfilename
+
+        exportSound = False
+        if args.exportsound:
+                exportSound = True
+
+        time = 0.1
+        if args.soundtime:
+                time = float(args.soundtime)
+
+        sampleRate = 48000
+        if args.soundsr:
+                sampleRate = float(args.soundsr)
+
+        soundEnv = 1000
+        if args.soundenv:
+                soundEnv = int(args.soundenv)
+        
+        freqBin = float((freqMax - freqMin) / N)
+
+        patternpos=(0,0)
+        if args.patternpos:
+                patternpos=eval(args.patternpos)
+        
+        if patternpos[0]<0 or patternpos[0]>N:
+                print('pattern position X out of bounds: 0 <= {} <= {}'.format(patternpos[0],N))
+
+        if patternpos[1]<0 or patternpos[1]>N:
+                print('pattern position Y out of bounds: 0 <= {} <= {}'.format(patternpos[1],N))
+        
+
+        return args
+
+# main() function 
+def main(args):
+        global N
+        global patternpos
+        
         # set animation update interval 
         updateInterval = 50
         if args.interval: 
                 updateInterval = int(args.interval) 
-
+        
         # declare grid 
         grid = np.array([]) 
 
         # check if "glider" demo flag is specified 
         grid = np.zeros(N*N).reshape(N, N) 
         if args.glider: 
-                addGlider(1, 1, grid) 
+                addGlider(patternpos[0], patternpos[1], grid) 
         elif args.gosper: 
-                addGosperGliderGun(10, 10, grid) 
+                addGosperGliderGun(patternpos[0], patternpos[1], grid) 
         elif args.rectanglesize: 
-                addRectangle(20, 20, grid, args.rectanglesize) 
+                addRectangle(patternpos[0], patternpos[1], grid, args.rectanglesize) 
         elif args.linesize: 
-                addLine(5, 5, grid, args.linesize) 
+                addLine(patternpos[0], patternpos[1], grid, args.linesize) 
         elif args.custom:
-                pattern = LIFReader.LIFReader(args.custom)
-                addCustom(1, 1, grid, pattern) 
+                pattern, infopattern = LIFReader.LIFReader(args.custom)
+                sizeX = (infopattern['xmax'] - infopattern['xmin'])
+                sizeY = (infopattern['ymax'] - infopattern['ymin'])
+                
+                if (sizeX > N):
+                        print('Increase grid size. Size of pattern: {},{} / {}'.format(sizeX, sizeY, N))
+                        sys.exit(1)
+                
+                if (sizeY > N):
+                        print('Increase grid size. Size of pattern: {},{} / {}'.format(sizeX, sizeY, N))
+                        sys.exit(1)
+                
+                addCustom(patternpos[0], patternpos[1], grid, pattern, infopattern) 
         else: # populate grid with random on/off - 
               # more off than on 
                 grid = randomGrid(N) 
-
+        
         # set up animation 
         fig, ax = plt.subplots() 
         img = ax.imshow(grid, interpolation='nearest') 
@@ -175,23 +268,38 @@ def main():
                                       frames = 10, 
                                       interval=updateInterval, 
                                       save_count=50) 
-
+        
         # # of frames? 
         # set output file 
         if args.movfile: 
                 ani.save(args.movfile, fps=30, extra_args=['-vcodec', 'libx264']) 
-
+        
         plt.show() 
 
 # call main 
-if __name__ == '__main__': 
-        soundFile = np.array(0, dtype='float64').reshape(1)
-        main()
+if __name__ == '__main__':
+        global exportSound
+        global sampleRate
+        global out_fn
+        global precompcos
+        global N
+        
+        args = process_options()
+        
+        if exportSound:
+                soundFile = np.array(0, dtype='float64').reshape(1)
 
-        fs = 44100
-        out_f = 'data.wav'
-
-        maxVal = np.amax(soundFile)
-        soundFile = soundFile / maxVal
-        wavf.write(out_f, 48000, soundFile)
-        #np.savetxt('datasound.txt',soundFile)
+                print('Performing precomputation for audio\n')
+                precompcos = np.zeros(N*int(sampleRate*time)).reshape(int(sampleRate*time),N)
+                phase = np.random.uniform(0,1,1000) * 2.0 * math.pi
+                for t in range(int(time * sampleRate)):
+                        for i in range(N):
+                                precompcos[t][i] = math.cos(2 * math.pi * (i*freqBin + freqMin) * float(t) / float(sampleRate) + phase[i])
+        
+        main(args)
+        
+        if exportSound:
+                maxVal = np.amax(soundFile)
+                soundFile = soundFile / maxVal / 2.0
+                wavf.write(out_fn, sampleRate, soundFile)
+        
