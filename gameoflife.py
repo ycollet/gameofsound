@@ -43,7 +43,6 @@ def addCustom(i, j, grid, patternlist, infopattern):
                 for index2 in range(len(pattern['pattern'])):
                         pat = pattern['pattern'][index2]
                         sizepat = len(pat)
-                        print('at pos {} -> {}, {} = {}'.format(offsetX + posX + i, offsetX + posX + i + sizepat, offsetY + posY + j + index2, pat))
                         grid[offsetX + posX + i:offsetX + posX + i + sizepat, offsetY + posY + j + index2] = pat
 
 def addGlider(i, j, grid): 
@@ -117,27 +116,25 @@ def update(frameNum, img, grid, N):
         global soundEnv
         global time
         global exportSound
-
-        if exportSound == True:
+        global maxframes
+        
+        print("Generation completed - frame number: {} / {}".format(frameNum, maxframes))
+        
+        if (exportSound == True):
                 soundData = np.zeros(int(time * sampleRate))
                 freqData = np.zeros(N)
-                #for i in range(N): 
-                #        for j in range(N): 
-                #                freqData[i] += grid[i, j]
                 for i in range(N): 
                         freqData[i] = grid[i][:].sum()
                 
                 for t in range(int(time * sampleRate)):
                         soundData[t] += np.multiply(freqData, precompcos[t][:]).sum()
-                
+
                 for i in range(1,soundEnv):
-                        soundData[-i] = soundData[-i] * 1.0 / float(soundEnv) * float(i)
+                        soundData[-i]  = soundData[-i]  * 1.0 / float(soundEnv) * float(i)
                         soundData[i-1] = soundData[i-1] * 1.0 / float(soundEnv) * float(i)
-                
+
                 soundFile = np.concatenate((soundFile, soundData))
-        
-        print("Generation completed - frame number: {}".format(frameNum))
-        
+         
         return img, 
 
 def process_options():
@@ -192,7 +189,7 @@ def process_options():
 
         out_fn = 'data.wav'
         if args.soundfilename:
-                outfn = args.soundfilename
+                out_fn = args.soundfilename
 
         exportSound = False
         if args.exportsound:
@@ -229,9 +226,11 @@ def process_options():
 def main(args):
         global N
         global patternpos
+        global maxframes
+        global movtime
         
         # set animation update interval 
-        updateInterval = 1.0/24.0
+        updateInterval = time
         if args.interval: 
                 updateInterval = int(args.interval) 
         
@@ -271,21 +270,22 @@ def main(args):
                 movtime = float(args.movtime)
         
         # set up animation 
+        maxframes = int(movtime/time)
         fig, ax = plt.subplots()
         plt.title('Game of life')
         ax.set_ylabel('Frequency')
         ax.set_xlabel('Density')
         img = ax.imshow(grid, interpolation='nearest') 
-        ani = animation.FuncAnimation(fig, update, fargs=(img, grid, N, ), 
-                                      frames=int(movtime*24), 
-                                      interval=updateInterval, 
-                                      save_count=sys.maxsize,
-                                      blit=True) 
+        ani = animation.FuncAnimation(fig, update, fargs = (img, grid, N, ), 
+                                      frames = maxframes, 
+                                      interval = time, 
+                                      save_count = sys.maxsize,
+                                      blit = True) 
         
         # # of frames? 
         # set output file 
         if args.movfile:
-                ani.save(args.movfile, fps=24, extra_args=['-vcodec', 'libx264']) 
+                ani.save(args.movfile, fps=1.0/time, extra_args=['-vcodec', 'libx264']) 
         
         plt.show() 
 
@@ -295,7 +295,10 @@ if __name__ == '__main__':
         global sampleRate
         global out_fn
         global precompcos
+        global time
+        global movtime
         global N
+        global maxframes
 
         args = process_options()
         
@@ -304,6 +307,7 @@ if __name__ == '__main__':
 
                 print('Performing precomputation for audio\n')
                 precompcos = np.zeros(N*int(sampleRate*time)).reshape(int(sampleRate*time),N)
+                # The random phase reduces the noise
                 phase = np.random.uniform(0,1,1000) * 2.0 * math.pi
                 for t in range(int(time * sampleRate)):
                         for i in range(N):
@@ -314,5 +318,13 @@ if __name__ == '__main__':
         if exportSound:
                 maxVal = np.amax(soundFile)
                 soundFile = soundFile / maxVal / 2.0
+                if args.movfile:
+                        print(maxframes)
+                        print(time)
+                        print(sampleRate)
+                        print(int(sampleRate*time*maxframes))
+                        soundFile = soundFile[0:int(sampleRate*time*maxframes)]
+                print(len(soundFile))
+                print(len(soundFile)/48000.0)
                 wavf.write(out_fn, sampleRate, soundFile)
         
